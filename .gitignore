@@ -1,0 +1,49 @@
+# Neovim
+*.swp
+*.swo
+*~
+.*.sw?
+
+# Lua
+luac.out
+
+# Testing
+.luacov
+*.out
+
+# macOS
+.DS_Store
+
+# Tags
+tags
+tags.lock
+tags.temp
+
+# Profiling
+profile.log
+profile.txt
+
+# Benchmarking results
+benchmark_results.txt
+
+# Temporary files
+tmp/
+temp/
+
+# Editor directories
+.vscode/
+.idea/
+
+# Plugin manager directories (if accidentally in theme dir)
+plugin/packer_compiled.lua
+
+# Log files
+*.log
+
+# Cache directories
+.cache/
+
+# Build artifacts
+build/
+dist/
+
