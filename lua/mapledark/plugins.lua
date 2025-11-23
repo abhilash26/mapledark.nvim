@@ -178,7 +178,7 @@ end
 
 -- Mason.nvim LSP installer
 M.loaders.mason = function(c)
-  hl('MasonNormal', { fg = c.fg, bg = c.bg_light })
+  hl('MasonNormal', { fg = c.fg, bg = c.bg })
   hl('MasonHeader', { fg = c.bg, bg = c.blue, bold = true })
   hl('MasonHeaderSecondary', { fg = c.bg, bg = c.cyan, bold = true })
   hl('MasonHighlight', { fg = c.blue, bold = true })
