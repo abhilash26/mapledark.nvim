@@ -31,7 +31,7 @@ local function get_colors()
     fg = '#cbd5e1',
     fg_dark = '#787c99',
     fg_light = '#f3f2f2',
-    linenr = '#4a4d5a',
+    linenr = '#a5a9b5',  -- Lightened to meet WCAG AAA normal text contrast (≥7.0:1)
 
     -- Semantic colors
     red = '#edabab',
