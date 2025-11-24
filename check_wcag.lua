@@ -48,10 +48,12 @@ end
 local ContrastResult = {}
 ContrastResult.__index = ContrastResult
 
-function ContrastResult.new(highlight, ratio)
+function ContrastResult.new(highlight, ratio, actual_fg, actual_bg)
   local self = setmetatable({}, ContrastResult)
   self.highlight = highlight
   self.ratio = ratio
+  self.actual_fg = actual_fg  -- The actual fg color used for calculation
+  self.actual_bg = actual_bg  -- The actual bg color used for calculation
   self.passes_aa_normal = ratio >= WCAG_AA_NORMAL
   self.passes_aa_large = ratio >= WCAG_AA_LARGE
   self.passes_aaa_normal = ratio >= WCAG_AAA_NORMAL
@@ -68,6 +70,8 @@ function WCAGChecker.new(project_root)
   self.project_root = project_root
   self.colors = {}
   self.highlights = {}
+  self.normal_fg = nil
+  self.normal_bg = nil
   self:_load_colors()
   return self
 end
@@ -153,19 +157,33 @@ function WCAGChecker:_parse_highlight(line, source_file)
   local fg = nil
   local bg = nil
   local bold = false
+  local fg_is_none = false
+  local bg_is_none = false
 
   -- Extract fg
   local fg_match = opts_str:match("fg%s*=%s*([^,}]+)")
   if fg_match then
     local fg_raw = fg_match:gsub("^%s+", ""):gsub("%s+$", ""):gsub("['\"]", "")
-    fg = self:_resolve_color(fg_raw)
+    -- Check if it's "none"
+    if fg_raw == "none" then
+      fg_is_none = true
+      fg = nil
+    else
+      fg = self:_resolve_color(fg_raw)
+    end
   end
 
   -- Extract bg
   local bg_match = opts_str:match("bg%s*=%s*([^,}]+)")
   if bg_match then
     local bg_raw = bg_match:gsub("^%s+", ""):gsub("%s+$", ""):gsub("['\"]", "")
-    bg = self:_resolve_color(bg_raw)
+    -- Check if it's "none"
+    if bg_raw == "none" then
+      bg_is_none = true
+      bg = nil
+    else
+      bg = self:_resolve_color(bg_raw)
+    end
   end
 
   -- Extract bold
@@ -173,7 +191,16 @@ function WCAGChecker:_parse_highlight(line, source_file)
     bold = true
   end
 
-  return HighlightGroup.new(group_name, fg, bg, bold, source_file)
+  -- Store Normal highlight colors for reference
+  if group_name == "Normal" then
+    self.normal_fg = fg or self.colors.fg
+    self.normal_bg = bg or self.colors.bg_dark or self.colors.bg
+  end
+
+  local highlight = HighlightGroup.new(group_name, fg, bg, bold, source_file)
+  highlight.fg_is_none = fg_is_none
+  highlight.bg_is_none = bg_is_none
+  return highlight
 end
 
 function WCAGChecker:_load_highlights()
@@ -186,6 +213,23 @@ function WCAGChecker:_load_highlights()
     "plugins.lua"
   }
 
+  -- First pass: find Normal highlight to get its colors
+  for _, filename in ipairs(files_to_check) do
+    local filepath = lua_dir .. "/" .. filename
+    local file = io.open(filepath, "r")
+    if file then
+      for line in file:lines() do
+        local highlight = self:_parse_highlight(line, filename)
+        if highlight and highlight.name == "Normal" then
+          -- Normal found, colors are stored in self.normal_fg and self.normal_bg
+          break
+        end
+      end
+      file:close()
+    end
+  end
+
+  -- Second pass: load all highlights (now Normal colors are known)
   for _, filename in ipairs(files_to_check) do
     local filepath = lua_dir .. "/" .. filename
     local file = io.open(filepath, "r")
@@ -243,34 +287,63 @@ end
 
 function WCAGChecker:check_contrast(highlight)
   -- Check contrast ratio for a highlight group
-  -- Need both fg and bg to calculate contrast
-  if not highlight.fg or not highlight.bg then
+  -- Use Normal highlight colors when fg/bg is "none" (transparent)
+  local fg = highlight.fg
+  local bg = highlight.bg
+
+  -- Get Normal highlight colors (fallback to defaults if Normal not found yet)
+  local normal_fg = self.normal_fg or self.colors.fg or "#cbd5e1"
+  local normal_bg = self.normal_bg or self.colors.bg_dark or self.colors.bg or "#1e1e1f"
+
+  -- If foreground is "none" or missing, use Normal's foreground
+  if highlight.fg_is_none or not fg then
+    fg = normal_fg
+  end
+
+  -- If background is "none" or missing, use Normal's background
+  if highlight.bg_is_none or not bg then
+    bg = normal_bg
+  end
+
+  -- If still no colors, can't check
+  if not fg or not bg then
     return nil
   end
 
-  local ratio = self:_get_contrast_ratio(highlight.fg, highlight.bg)
-  return ContrastResult.new(highlight, ratio)
+  -- Skip highlights where fg and bg are intentionally the same (like Ignore, EndOfBuffer)
+  -- These are meant to be invisible and don't need contrast checking
+  if fg == bg then
+    return nil
+  end
+
+  local ratio = self:_get_contrast_ratio(fg, bg)
+  return ContrastResult.new(highlight, ratio, fg, bg)
 end
 
 function WCAGChecker:check_all()
   -- Check all highlight groups
   self:_load_highlights()
   local results = {}
+  local unchecked = {}
 
   for _, highlight in ipairs(self.highlights) do
     local result = self:check_contrast(highlight)
     if result then
       table.insert(results, result)
+    else
+      table.insert(unchecked, highlight)
     end
   end
 
-  return results
+  return results, unchecked
 end
 
-function WCAGChecker:print_report(results)
+function WCAGChecker:print_report(results, unchecked)
   -- Print a formatted report
-  if #results == 0 then
-    print("No highlight groups with both foreground and background colors found.")
+  unchecked = unchecked or {}
+
+  if #results == 0 and #unchecked == 0 then
+    print("No highlight groups found.")
     return
   end
 
@@ -280,7 +353,12 @@ function WCAGChecker:print_report(results)
   print(string.rep("=", 80))
   print("WCAG COLOR CONTRAST COMPLIANCE REPORT")
   print(string.rep("=", 80))
-  print(string.format("\nTotal highlight groups checked: %d\n", #results))
+  print(string.format("\nTotal highlight groups found: %d", #results + #unchecked))
+  print(string.format("Highlight groups checked: %d", #results))
+  if #unchecked > 0 then
+    print(string.format("Highlight groups unchecked (no colors): %d", #unchecked))
+  end
+  print()
 
   -- Group results by compliance level
   local aa_normal_failures = {}
@@ -303,6 +381,13 @@ function WCAGChecker:print_report(results)
     end
   end
 
+  -- Count highlights by file
+  local highlights_by_file = {}
+  for _, result in ipairs(results) do
+    local file = result.highlight.source_file
+    highlights_by_file[file] = (highlights_by_file[file] or 0) + 1
+  end
+
   -- Print summary
   print("SUMMARY:")
   print(string.format("  WCAG AA (Normal text, ≥4.5:1): %d/%d pass", #results - #aa_normal_failures, #results))
@@ -311,7 +396,27 @@ function WCAGChecker:print_report(results)
   print(string.format("  WCAG AAA (Large text, ≥4.5:1): %d/%d pass", #results - #aaa_large_failures, #results))
   print()
 
-  -- Print failures
+  -- Print highlights by file
+  print("HIGHLIGHTS BY FILE:")
+  for file, count in pairs(highlights_by_file) do
+    print(string.format("  %s: %d highlight groups", file, count))
+  end
+  print()
+
+  -- Print failures section
+  local total_failures = #aa_normal_failures + #aa_large_failures + #aaa_normal_failures + #aaa_large_failures
+
+  if total_failures > 0 then
+    print(string.rep("=", 80))
+    print("FAILURES SUMMARY")
+    print(string.rep("=", 80))
+    print(string.format("  WCAG AA Normal failures: %d", #aa_normal_failures))
+    print(string.format("  WCAG AA Large failures: %d", #aa_large_failures))
+    print(string.format("  WCAG AAA Normal failures: %d", #aaa_normal_failures))
+    print(string.format("  WCAG AAA Large failures: %d", #aaa_large_failures))
+    print()
+  end
+
   if #aa_normal_failures > 0 then
     print(string.rep("=", 80))
     print("FAILURES - WCAG AA (Normal Text, ≥4.5:1)")
@@ -320,33 +425,83 @@ function WCAGChecker:print_report(results)
       local h = result.highlight
       print(string.format("\n  %s", h.name))
       print(string.format("    File: %s", h.source_file))
-      print(string.format("    Colors: fg=%s bg=%s", h.fg or "nil", h.bg or "nil"))
+      local fg_display = result.actual_fg or h.fg or "(none)"
+      local bg_display = result.actual_bg or h.bg or "(none)"
+      if h.fg_is_none or (not h.fg and h.name ~= "Normal") then
+        fg_display = fg_display .. " (from Normal)"
+      end
+      if h.bg_is_none or (not h.bg and h.name ~= "Normal") then
+        bg_display = bg_display .. " (from Normal)"
+      end
+      print(string.format("    Colors: fg=%s bg=%s", fg_display, bg_display))
       print(string.format("    Contrast Ratio: %.2f:1", result.ratio))
       print(string.format("    Bold: %s", tostring(h.bold)))
       print(string.format("    Status: %s", result.passes_aa_large and "PASS (Large text)" or "FAIL"))
     end
+    print()
+  end
+
+  if #aa_large_failures > 0 then
+    print(string.rep("=", 80))
+    print("FAILURES - WCAG AA (Large Text, ≥3.0:1)")
+    print(string.rep("=", 80))
+    for _, result in ipairs(aa_large_failures) do
+      local h = result.highlight
+      print(string.format("\n  %s", h.name))
+      print(string.format("    File: %s", h.source_file))
+      print(string.format("    Colors: fg=%s bg=%s", h.fg or "(default)", h.bg or "(default)"))
+      print(string.format("    Contrast Ratio: %.2f:1", result.ratio))
+      print(string.format("    Bold: %s", tostring(h.bold)))
+      print(string.format("    Status: FAIL"))
+    end
+    print()
   end
 
   if #aaa_normal_failures > 0 then
-    print("\n" .. string.rep("=", 80))
+    print(string.rep("=", 80))
     print("FAILURES - WCAG AAA (Normal Text, ≥7.0:1)")
     print(string.rep("=", 80))
     for _, result in ipairs(aaa_normal_failures) do
       local h = result.highlight
       print(string.format("\n  %s", h.name))
       print(string.format("    File: %s", h.source_file))
-      print(string.format("    Colors: fg=%s bg=%s", h.fg or "nil", h.bg or "nil"))
+      local fg_display = result.actual_fg or h.fg or "(none)"
+      local bg_display = result.actual_bg or h.bg or "(none)"
+      if h.fg_is_none or (not h.fg and h.name ~= "Normal") then
+        fg_display = fg_display .. " (from Normal)"
+      end
+      if h.bg_is_none or (not h.bg and h.name ~= "Normal") then
+        bg_display = bg_display .. " (from Normal)"
+      end
+      print(string.format("    Colors: fg=%s bg=%s", fg_display, bg_display))
       print(string.format("    Contrast Ratio: %.2f:1", result.ratio))
       print(string.format("    Bold: %s", tostring(h.bold)))
       print(string.format("    Status: %s", result.passes_aaa_large and "PASS (Large text)" or "FAIL"))
     end
+    print()
+  end
+
+  if #aaa_large_failures > 0 then
+    print(string.rep("=", 80))
+    print("FAILURES - WCAG AAA (Large Text, ≥4.5:1)")
+    print(string.rep("=", 80))
+    for _, result in ipairs(aaa_large_failures) do
+      local h = result.highlight
+      print(string.format("\n  %s", h.name))
+      print(string.format("    File: %s", h.source_file))
+      print(string.format("    Colors: fg=%s bg=%s", h.fg or "(default)", h.bg or "(default)"))
+      print(string.format("    Contrast Ratio: %.2f:1", result.ratio))
+      print(string.format("    Bold: %s", tostring(h.bold)))
+      print(string.format("    Status: FAIL"))
+    end
+    print()
   end
 
   -- Print all results in a table
   print("\n" .. string.rep("=", 80))
   print("ALL HIGHLIGHT GROUPS - DETAILED RESULTS")
   print(string.rep("=", 80))
-  print(string.format("\n%-40s %-10s %-8s %-8s %s", "Highlight Group", "Ratio", "AA", "AAA", "Colors"))
+  print(string.format("\n%-40s %-10s %-8s %-8s %-12s %s", "Highlight Group", "Ratio", "AA", "AAA", "File", "Colors"))
   print(string.rep("-", 80))
 
   -- Sort by name for the table
@@ -354,11 +509,40 @@ function WCAGChecker:print_report(results)
 
   for _, result in ipairs(results) do
     local h = result.highlight
-    local aa_status = result.passes_aa_normal and "✓" or (result.passes_aa_large and "L" or "✗")
-    local aaa_status = result.passes_aaa_normal and "✓" or (result.passes_aaa_large and "L" or "✗")
-    local colors_str = string.format("%s / %s", h.fg or "nil", h.bg or "nil")
+    local aa_status = result.passes_aa_normal and "✅" or (result.passes_aa_large and "⚠️" or "❌")
+    local aaa_status = result.passes_aaa_normal and "✅" or (result.passes_aaa_large and "⚠️" or "❌")
+    -- Show actual colors used for calculation (from Normal if none was specified)
+    local fg_display = result.actual_fg or h.fg or "(none)"
+    local bg_display = result.actual_bg or h.bg or "(none)"
+    -- Mark if using Normal's colors
+    if h.fg_is_none or (not h.fg and h.name ~= "Normal") then
+      fg_display = fg_display .. " (Normal)"
+    end
+    if h.bg_is_none or (not h.bg and h.name ~= "Normal") then
+      bg_display = bg_display .. " (Normal)"
+    end
+    local colors_str = string.format("%s / %s", fg_display, bg_display)
 
-    print(string.format("%-40s %6.2f:1  %-8s %-8s %s", h.name, result.ratio, aa_status, aaa_status, colors_str))
+    print(string.format("%-40s %6.2f:1  %-8s %-8s %-12s %s", h.name, result.ratio, aa_status, aaa_status, h.source_file, colors_str))
+  end
+
+  -- Show unchecked highlights if any
+  if #unchecked > 0 then
+    print("\n" .. string.rep("=", 80))
+    print("UNCHECKED HIGHLIGHT GROUPS (No colors defined)")
+    print(string.rep("=", 80))
+    print(string.format("\n%-40s %-12s %s", "Highlight Group", "File", "Colors"))
+    print(string.rep("-", 80))
+
+    table.sort(unchecked, function(a, b) return a.name < b.name end)
+
+    for _, highlight in ipairs(unchecked) do
+      local fg_display = highlight.fg or "none"
+      local bg_display = highlight.bg or "none"
+      local colors_str = string.format("fg=%s bg=%s", fg_display, bg_display)
+      print(string.format("%-40s %-12s %s", highlight.name, highlight.source_file, colors_str))
+    end
+    print()
   end
 
   print()
@@ -393,8 +577,8 @@ local function main()
   end
 
   local checker = WCAGChecker.new(project_root)
-  local results = checker:check_all()
-  checker:print_report(results)
+  local results, unchecked = checker:check_all()
+  checker:print_report(results, unchecked)
 
   -- Exit with error code if there are failures
   local aa_failures = 0
