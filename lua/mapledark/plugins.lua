@@ -101,10 +101,10 @@ M.loaders.fzflua = function(c)
   hl('FzfLuaPreviewNormal', { fg = c.fg, bg = c.bg_dark })
   hl('FzfLuaPreviewBorder', { fg = c.border, bg = c.bg_dark })
   hl('FzfLuaPreviewTitle', { fg = c.cyan, bg = c.bg_dark, bold = true })
-  hl('FzfLuaCursor', { fg = c.bg_dark, bg = c.blue })
+  hl('FzfLuaCursor', { fg = c.bg, bg = c.blue })  -- Darker fg for AA compliance
   hl('FzfLuaCursorLine', { bg = c.bg_sel })
   hl('FzfLuaCursorLineNr', { fg = c.blue, bg = c.bg_sel, bold = true })
-  hl('FzfLuaSearch', { fg = c.bg_dark, bg = c.yellow, bold = true })
+  hl('FzfLuaSearch', { fg = c.bg, bg = c.yellow, bold = true })  -- Darker fg for AA compliance
   hl('FzfLuaScrollBorderEmpty', { fg = c.bg_dark, bg = c.bg_dark })
   hl('FzfLuaScrollBorderFull', { fg = c.border, bg = c.bg_dark })
   hl('FzfLuaScrollFloatEmpty', { fg = c.bg_dark, bg = c.bg_dark })

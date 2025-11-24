@@ -25,7 +25,7 @@ local function get_colors()
     bg = '#1e1e1f',
     bg_light = '#333333',
     bg_sel = '#2a2a2b',
-    border = '#666666',
+    border = '#858890',  -- Lightened to meet WCAG AA normal text contrast (≥4.5:1)
 
     -- Foreground colors
     fg = '#cbd5e1',
@@ -139,11 +139,11 @@ function M.setup(opts)
   hl('Pmenu', { fg = c.fg, bg = c.bg_light })
   hl('PmenuSel', { fg = c.bg, bg = c.blue, bold = true })
   hl('PmenuKind', { fg = c.yellow, bg = c.bg_light })
-  hl('PmenuKindSel', { fg = c.yellow_br, bg = c.blue, bold = true })
+  hl('PmenuKindSel', { fg = c.bg, bg = c.blue, bold = true })  -- Darker fg for AA compliance
   hl('PmenuExtra', { fg = c.fg_dark, bg = c.bg_light })
-  hl('PmenuExtraSel', { fg = c.bg_light, bg = c.blue })
+  hl('PmenuExtraSel', { fg = c.bg, bg = c.blue })  -- Darker fg for AA compliance
   hl('PmenuSbar', { bg = c.bg_light })
-  hl('PmenuThumb', { bg = c.border })
+  hl('PmenuThumb', { fg = c.border, bg = c.bg_light })  -- Fixed for AA compliance
 
   -- Tabs
   hl('TabLine', { fg = c.fg_dark, bg = c.bg_sel })
