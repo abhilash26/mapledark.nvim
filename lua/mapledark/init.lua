@@ -103,7 +103,7 @@ function M.setup(opts)
   hl('CursorColumn', { bg = c.bg_sel })
   hl('ColorColumn', { bg = c.bg_dark })
 
-  hl('LineNr', { fg = c.linenr, bg = c.bg_dark })
+  hl('LineNr', { fg = c.linenr, bg = c.bg })
   hl('CursorLineNr', { fg = c.fg_dark, bg = c.bg, bold = true })
   hl('SignColumn', { bg = c.bg })
   hl('FoldColumn', { fg = c.fg_dark, bg = c.bg })
