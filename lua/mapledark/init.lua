@@ -21,40 +21,41 @@ local function get_colors()
 
   _cache.colors = {
     -- Background colors
-    bg_dark = '#1a1a1b',
-    bg = '#1e1e1f',
-    bg_light = '#333333',
-    bg_sel = '#2a2a2b',
-    border = '#858890',  -- Lightened to meet WCAG AA normal text contrast (≥4.5:1)
+    bg_dark   = '#121315',  -- main terminal background
+    bg        = '#797e85',  -- secondary bg (e.g., folds, floating)
+    bg_light  = '#7c8794',  -- lighter panels
+    bg_sel    = '#8f909d',  -- selection background
+    border    = '#7c808d',  -- border lines / window edges
 
     -- Foreground colors
-    fg = '#cbd5e1',
-    fg_dark = '#787c99',
-    fg_light = '#f3f2f2',
-    linenr = '#a5a9b5',  -- Lightened to meet WCAG AAA normal text contrast (≥7.0:1)
+    fg        = '#cbd5e1',  -- main text
+    fg_dark   = '#98a2b3',  -- comments / muted text
+    fg_light  = '#ffffff',  -- bright highlights / prompts
+    linenr    = '#b0b6c2',  -- line numbers
 
-    -- Semantic colors
-    red = '#edabab',
-    orange = '#eecfa0',
-    yellow = '#ffe8b9',
-    green = '#a4dfae',
-    cyan = '#a1e8e5',
-    blue = '#8fc7ff',
-    magenta = '#d2ccff',
-    accent = '#bafffe',
+    -- Semantic / syntax colors
+    red       = '#f0b3b3',  -- errors, warnings
+    orange    = '#f1d0a3',  -- warnings, hints
+    yellow    = '#fff0c0',  -- highlights / TODOs
+    green     = '#a8e0b5',  -- success / diff add
+    cyan      = '#a6ebe9',  -- info / types
+    blue      = '#95d0ff',  -- functions / keywords
+    magenta   = '#d7d0ff',  -- classes / strings / tags
+    accent    = '#c2ffff',  -- cursor / accent
 
-    -- Brighter variants
-    red_br = '#ffc4c4',
-    orange_br = '#ffd699',
-    yellow_br = '#fff4d4',
-    green_br = '#bdf8c7',
-    cyan_br = '#c9f4f1',
-    blue_br = '#a8e0ff',
-    magenta_br = '#ebe5ff',
+    -- Brighter variants (for floating windows, popups, or emphasis)
+    red_br     = '#ffc9c9',
+    orange_br  = '#ffe0a3',
+    yellow_br  = '#fff8d0',
+    green_br   = '#c1fcd3',
+    cyan_br    = '#d0f8f6',
+    blue_br    = '#b0e4ff',
+    magenta_br = '#f0ebff',
   }
 
   return _cache.colors
 end
+
 
 -- Expose colors as a property
 M.colors = setmetatable({}, {
